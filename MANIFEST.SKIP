@@ -1,0 +1,23 @@
+# Avoid version control files
+\.hg/
+\.hgignore$
+\.hgtags$
+
+# Avoid Module::Build generated and utility files
+^Build$
+^_build_params$
+^MYMETA\.
+^blib/
+
+# Avoid archives of this distribution
+\.tar\.gz$
+
+# Development-only files: not part of the public distribution
+^archive/
+^CLAUDE\.md$
+^\.claude/
+^vendor/
+^site_perl(/|$)
+^dev_db\.access\.dat$
+^MANIFEST\.SKIP$
+^release/

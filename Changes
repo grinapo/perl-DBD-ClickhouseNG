@@ -1,0 +1,14 @@
+Revision history for DBD-ClickhouseNG
+
+0.50   2026-07-20
+       - Catalog/introspection: table_info, column_info, type_info_all,
+         primary_key_info.
+       - Bounded-batch streaming fetch for large result sets
+         (fetch_batch_rows).
+       - TLS/SSL support, including an opt-in insecure mode (tls_insecure).
+       - get_info, data_sources, ParamArrays, ChopBlanks.
+       - CPAN packaging cleanup: LICENSE file (Artistic 1.0 / GPL v3+),
+         MANIFEST brought back in sync with the shipped test suite.
+
+0.001  2026-07-19
+       - Initial implementation per DESIGN.md.
