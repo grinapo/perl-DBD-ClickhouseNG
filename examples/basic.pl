@@ -3,7 +3,7 @@
 #
 # Usage: perl examples/basic.pl dbi:ClickhouseNG:host=localhost [user [password]]
 
-use v5.40;
+use v5.38;
 use DBI;
 
 my( $dsn, $user, $password ) = @ARGV;

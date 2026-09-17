@@ -1,6 +1,6 @@
 package DBD::ClickhouseNG;
 
-use v5.40;
+use v5.38;
 use DBI qw(:sql_types);
 use Scalar::Util qw(looks_like_number);
 use Carp ();

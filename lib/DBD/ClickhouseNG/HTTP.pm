@@ -1,6 +1,6 @@
 package DBD::ClickhouseNG::HTTP;
 
-use v5.40;
+use v5.38;
 use HTTP::Tiny 0.088;
 use IO::Compress::Gzip   qw(gzip $GzipError);
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
@@ -218,7 +218,7 @@ sub query_stream( $self, $sql, $params = {} ) {
 # ---------------------------------------------------------------------------
 package DBD::ClickhouseNG::HTTP::LineReader;
 
-use v5.40;
+use v5.38;
 
 sub new( $class, $sock ) {
     return bless { sock => $sock, buf => '', eof => 0 }, $class;
