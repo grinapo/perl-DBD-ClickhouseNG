@@ -1,4 +1,4 @@
-use v5.40;
+use v5.38;
 use Test::More;
 no warnings 'once';
 
