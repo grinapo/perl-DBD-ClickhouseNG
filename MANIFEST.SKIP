@@ -21,3 +21,8 @@
 ^dev_db\.access\.dat$
 ^MANIFEST\.SKIP$
 ^release/
+
+# CI configuration: not part of the public distribution
+^\.github/
+^\.gitlab-ci\.yml$
+^\.gitea/

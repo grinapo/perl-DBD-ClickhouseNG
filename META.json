@@ -24,7 +24,7 @@
             "JSON::PP" : "4.16",
             "Net::HTTP" : "0",
             "Scalar::Util" : "0",
-            "perl" : "5.040000"
+            "perl" : "5.038000"
          }
       },
       "test" : {

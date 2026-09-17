@@ -222,9 +222,3 @@ are skipped unless `CHNG_TEST_DSN` is set:
     CHNG_TEST_DSN='dbi:ClickhouseNG:host=localhost' ./Build test
 
 Optional `CHNG_TEST_USER` / `CHNG_TEST_PASS` for non-default credentials.
-
-# Disclaimer
-
-LLM tooling was used in the development. Majority of the code was written
-or reviewed by a sometimes robot-like human, who owns all the bugs and
-responsibility.
