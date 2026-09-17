@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install cpanm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpanminus
+
+      - name: Install ClickHouse server (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg
+          curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' \
+            | sudo gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg
+          ARCH=$(dpkg --print-architecture)
+          echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=${ARCH}] https://packages.clickhouse.com/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/clickhouse.list
+          sudo apt-get update
+          sudo apt-get install -y clickhouse-server clickhouse-client
+          sudo service clickhouse-server start
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8123/ping && break
+            sleep 1
+          done
+
+      - name: Enable live integration tests (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "CHNG_TEST_DSN=dbi:ClickhouseNG:host=localhost" >> "$GITHUB_ENV"
+
+      - name: Install Perl dependencies
+        run: |
+          sudo cpanm --notest Module::Build::Tiny
+          sudo cpanm --notest --installdeps .
+
+      - name: Run tests
+        run: |
+          perl Build.PL
+          ./Build test
+
+      - name: Install packaging tools (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: sudo apt-get install -y dh-make-perl fakeroot dpkg-dev
+
+      - name: Build release artifacts (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          release/build-tarball.sh --allow-dirty
+          release/build-deb.sh --allow-dirty
+
+      - name: Upload release artifacts (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: release/dist/*
+          if-no-files-found: error
