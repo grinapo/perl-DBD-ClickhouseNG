@@ -38,12 +38,13 @@ jobs:
 
       - name: Install Perl dependencies
         run: |
-          sudo cpanm --notest Module::Build::Tiny
-          sudo cpanm --notest --installdeps .
+          sudo cpanm --sudo --notest Module::Build::Tiny
+          sudo cpanm --sudo --notest --installdeps .
 
       - name: Run tests
         run: |
           perl Build.PL
+          ./Build
           ./Build test
 
       - name: Install packaging tools (tag builds only)
