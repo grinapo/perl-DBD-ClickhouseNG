@@ -12,13 +12,7 @@ jobs:
     container: debian:trixie
     env:
       DEBIAN_FRONTEND: noninteractive
-    services:
-      # Service containers cannot be made conditional; it is only used by the
-      # live tests, which are enabled on tag builds below.
-      clickhouse:
-        image: clickhouse/clickhouse-server:26.8
-        env:
-          CLICKHOUSE_SKIP_USER_SETUP: 1
+      CH_CERTS: /etc/clickhouse-server/certs
     steps:
       - uses: actions/checkout@v7
 
@@ -27,17 +21,42 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             perl libmodule-build-tiny-perl libdbi-perl libio-socket-ssl-perl \
-            libnet-http-perl libjson-pp-perl curl ca-certificates
+            libnet-http-perl libjson-pp-perl curl ca-certificates gnupg openssl
 
-      - name: Enable live integration tests (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Install ClickHouse server
         run: |
+          curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' \
+            | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=$(dpkg --print-architecture)] https://packages.clickhouse.com/deb lts main" \
+            > /etc/apt/sources.list.d/clickhouse.list
+          apt-get update
+          apt-get install -y clickhouse-server clickhouse-client
+
+      - name: Configure HTTPS and the mTLS user, start ClickHouse
+        run: |
+          bash .github/ci-tls-setup.sh /etc/clickhouse-server
+          runuser -u clickhouse -- clickhouse-server \
+            --config-file=/etc/clickhouse-server/config.xml --daemon
           for i in $(seq 1 30); do
-            curl -sf http://clickhouse:8123/ping && break
+            curl -sf http://localhost:8123/ping && break
             sleep 1
           done
-          curl -sf http://clickhouse:8123/ping
-          echo "CHNG_TEST_DSN=dbi:ClickhouseNG:host=clickhouse" >> "$GITHUB_ENV"
+          curl -sf http://localhost:8123/ping
+          curl -sf --cacert "$CH_CERTS/ca.crt" https://localhost:8443/ping
+
+      - name: Enable live integration tests
+        run: |
+          cat >> "$GITHUB_ENV" <<EOF
+          CHNG_TEST_DSN=dbi:ClickhouseNG:host=localhost
+          CHNG_TEST_TLS_HOST=localhost
+          CHNG_TEST_TLS_WRONG_HOST=127.0.0.1
+          CHNG_TEST_TLS_CA=$CH_CERTS/ca.crt
+          CHNG_TEST_MTLS_HOST=localhost
+          CHNG_TEST_MTLS_USER=chng_mtls
+          CHNG_TEST_MTLS_CERT=$CH_CERTS/client.crt
+          CHNG_TEST_MTLS_KEY=$CH_CERTS/client.key
+          CHNG_TEST_MTLS_CA=$CH_CERTS/ca.crt
+          EOF
 
       - name: Run tests
         run: |
