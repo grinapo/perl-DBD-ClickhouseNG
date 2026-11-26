@@ -7,7 +7,7 @@ use DBD::ClickhouseNG::dr;
 use DBD::ClickhouseNG::db;
 use DBD::ClickhouseNG::st;
 
-our $VERSION = '0.52.01';
+our $VERSION = '0.52.03';
 our $drh;
 
 # Cpanel::JSON::XS is a drop-in-compatible, actively-maintained XS
