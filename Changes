@@ -1,4 +1,5 @@
 Revision history for DBD-ClickhouseNG
+=====================================
 
 0.50   2026-07-20
        - Catalog/introspection: table_info, column_info, type_info_all,
