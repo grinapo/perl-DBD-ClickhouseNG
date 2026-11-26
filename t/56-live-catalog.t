@@ -1,4 +1,4 @@
-use v5.38;
+use v5.40;
 use Test::More;
 use DBI;
 
@@ -11,6 +11,9 @@ my $pass = $ENV{CHNG_TEST_PASS};
 
 my $dbh = DBI->connect( $dsn, $user, $pass, { RaiseError => 1, PrintError => 0, AutoCommit => 1 } );
 ok( $dbh, 'connected' ) or BAIL_OUT( "cannot connect: $DBI::errstr" );
+
+# The database CHNG_TEST_DSN connects to; catalog results report it as TABLE_CAT.
+my( $db ) = $dbh->selectrow_array( 'SELECT currentDatabase()' );
 
 my $table = 'dbd_chng_test_56_' . $$;
 
@@ -43,7 +46,7 @@ subtest 'tables() finds it too, via the generic DBI layer over table_info' => su
     # DBI's generic tables() quotes catalog.table via quote_identifier() once
     # SQL_IDENTIFIER_QUOTE_CHAR (get_info type 29) is non-empty -- see DBI.pm's
     # tables(). TABLE_SCHEM is always undef for us, so it's omitted.
-    is_deeply( \@t, [ qq{"DBD_dev"."$table"} ] );
+    is_deeply( \@t, [ qq{"$db"."$table"} ] );
 };
 
 subtest 'table_info with a non-matching pattern returns no rows' => sub {
@@ -104,8 +107,8 @@ subtest 'primary_key_info: a MergeTree table reports its ORDER BY as the key, in
     my $sth = $dbh->primary_key_info( undef, undef, $mt_table );
     my $rows = $sth->fetchall_arrayref;
     is_deeply( $rows, [
-        [ 'DBD_dev', undef, $mt_table, 'id', 1, undef ],
-        [ 'DBD_dev', undef, $mt_table, 'ts', 2, undef ],
+        [ $db, undef, $mt_table, 'id', 1, undef ],
+        [ $db, undef, $mt_table, 'ts', 2, undef ],
     ] );
 
     my @pk = $dbh->primary_key( undef, undef, $mt_table );
@@ -130,9 +133,9 @@ subtest 'get_info: SQL_DBMS_VER matches the real server version' => sub {
     like( $ver, qr/\A\d+\.\d+\.\d+/, 'looks like a ClickHouse version string' );
 };
 
-subtest 'data_sources: DBD_dev is among the databases the connected user can see' => sub {
+subtest 'data_sources: the connected database is among the databases the user can see' => sub {
     my @ds = $dbh->data_sources;
-    ok( scalar( grep { /database=DBD_dev\z/ } @ds ), 'DBD_dev is listed' )
+    ok( scalar( grep { /database=\Q$db\E\z/ } @ds ), "$db is listed" )
         or diag( "got: @ds" );
 };
 

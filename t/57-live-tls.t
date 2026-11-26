@@ -1,4 +1,4 @@
-use v5.38;
+use v5.40;
 use Test::More;
 use DBI;
 use DBD::ClickhouseNG::HTTP;
@@ -10,21 +10,25 @@ plan skip_all => 'set CHNG_TEST_DSN to run live integration tests'
 my $user = $ENV{CHNG_TEST_USER};
 my $pass = $ENV{CHNG_TEST_PASS};
 
-# Fixed TLS endpoint on the same dev server as CHNG_TEST_DSN, serving a
-# certificate valid for this exact hostname (SAN: narya.grin.hu) -- not
-# 'localhost' or an IP, so hostname verification requires connecting by
-# this specific name for the positive path, and by a *wrong* name
-# (localhost, same server/port/cert) for a durable negative path that
-# doesn't depend on the certificate's expiry date.
-use constant TLS_HOST       => 'narya.grin.hu';
-use constant TLS_WRONG_HOST => 'localhost';
-use constant TLS_PORT       => 8443;
+# TLS endpoint, from the environment (no hard-coded hosts; see t/README.md):
+#   CHNG_TEST_TLS_HOST        server name; the certificate must be valid for
+#                             exactly this name (required)
+#   CHNG_TEST_TLS_PORT        HTTPS port (default 8443)
+#   CHNG_TEST_TLS_CA          CA bundle for the server certificate (optional;
+#                             default: system store)
+#   CHNG_TEST_TLS_WRONG_HOST  another name reaching the same server/port/cert
+#                             (e.g. localhost); enables the hostname-mismatch
+#                             and tls_insecure subtests (optional)
+# The DB name and credentials still come from CHNG_TEST_DSN/_USER/_PASS.
+my $TLS_HOST       = $ENV{CHNG_TEST_TLS_HOST};
+my $TLS_WRONG_HOST = $ENV{CHNG_TEST_TLS_WRONG_HOST};
+my $TLS_PORT       = $ENV{CHNG_TEST_TLS_PORT} || 8443;
+my $TLS_CA         = $ENV{CHNG_TEST_TLS_CA};
+plan skip_all => 'set CHNG_TEST_TLS_HOST to run the live TLS test'
+    unless defined $TLS_HOST && length $TLS_HOST;
 
 # Cheap reachability probe so this file degrades to a skip (not a hang) on
-# a network that can't resolve/reach either name -- the hostname-mismatch
-# subtests specifically depend on TLS_WRONG_HOST:TLS_PORT serving the exact
-# same server/certificate as TLS_HOST:TLS_PORT (true on the dev box this
-# was written against), not merely being reachable on its own.
+# a network that can't resolve/reach the configured name(s).
 sub _probe_reachable( $host, $port ) {
     require IO::Socket::INET;
     my $sock = IO::Socket::INET->new( PeerHost => $host, PeerPort => $port, Timeout => 3 );
@@ -32,12 +36,19 @@ sub _probe_reachable( $host, $port ) {
     $sock->close if $sock;
     return $ok;
 }
-my $reachable = eval { _probe_reachable( TLS_HOST, TLS_PORT ) && _probe_reachable( TLS_WRONG_HOST, TLS_PORT ) };
-plan skip_all => 'TLS test host(s) ' . TLS_HOST . '/' . TLS_WRONG_HOST . ':' . TLS_PORT . ' not reachable'
+my $reachable = eval { grep( { !_probe_reachable( $_, $TLS_PORT ) } grep { length } $TLS_HOST, $TLS_WRONG_HOST // () ) == 0 };
+plan skip_all => "TLS test host(s) not reachable on port $TLS_PORT"
     unless $reachable;
 
+my $ca_dsn  = $TLS_CA ? ";tls_ca_file=$TLS_CA" : '';
+my %ca_args = $TLS_CA ? ( tls_ca_file => $TLS_CA ) : ();
+
+# The TLS connections below use the same database as CHNG_TEST_DSN.
+my( $db ) = DBI->connect( $dsn, $user, $pass, { RaiseError => 1, PrintError => 0 } )
+    ->selectrow_array( 'SELECT currentDatabase()' );
+
 subtest 'buffered path (HTTP::Tiny, verify_SSL => 1): a valid cert connects and queries' => sub {
-    my $tls_dsn = 'dbi:ClickhouseNG:host=' . TLS_HOST . ';port=' . TLS_PORT . ';tls=1;database=DBD_dev';
+    my $tls_dsn = 'dbi:ClickhouseNG:host=' . $TLS_HOST . ';port=' . $TLS_PORT . ';tls=1' . $ca_dsn . ';database=' . $db;
     my $dbh = DBI->connect( $tls_dsn, $user, $pass, { RaiseError => 1, PrintError => 0 } );
     ok( $dbh, 'connect succeeds' ) or diag $DBI::errstr;
     my( $one ) = $dbh->selectrow_array( 'SELECT 1' );
@@ -47,8 +58,8 @@ subtest 'buffered path (HTTP::Tiny, verify_SSL => 1): a valid cert connects and 
 
 subtest 'streaming path (Net::HTTPS, explicit SSL_verify_mode/SSL_verifycn_scheme): a valid cert connects' => sub {
     my $client = DBD::ClickhouseNG::HTTP->new(
-        host => TLS_HOST, port => TLS_PORT, tls => 1, timeout => 5,
-        user => $user, password => $pass, database => 'DBD_dev',
+        host => $TLS_HOST, port => $TLS_PORT, %ca_args, tls => 1, timeout => 5,
+        user => $user, password => $pass, database => $db,
     );
     my $res = $client->query_stream( 'SELECT 1' );
     ok( $res->{ok}, 'query_stream succeeds' ) or diag $res->{body};
@@ -57,7 +68,8 @@ subtest 'streaming path (Net::HTTPS, explicit SSL_verify_mode/SSL_verifycn_schem
 };
 
 subtest 'buffered path refuses a hostname mismatch (same cert/server, wrong name)' => sub {
-    my $tls_dsn = 'dbi:ClickhouseNG:host=' . TLS_WRONG_HOST . ';port=' . TLS_PORT . ';tls=1;database=DBD_dev';
+    plan skip_all => 'set CHNG_TEST_TLS_WRONG_HOST to run this subtest' unless $TLS_WRONG_HOST;
+    my $tls_dsn = 'dbi:ClickhouseNG:host=' . $TLS_WRONG_HOST . ';port=' . $TLS_PORT . ';tls=1' . $ca_dsn . ';database=' . $db;
     my $dbh = DBI->connect( $tls_dsn, $user, $pass, { RaiseError => 0, PrintError => 0 } );
     ok( !defined $dbh, 'connect refused' );
     like( $DBI::errstr, qr/hostname verification failed/i,
@@ -66,14 +78,15 @@ subtest 'buffered path refuses a hostname mismatch (same cert/server, wrong name
 };
 
 subtest 'streaming path refuses a hostname mismatch (same cert/server, wrong name)' => sub {
+    plan skip_all => 'set CHNG_TEST_TLS_WRONG_HOST to run this subtest' unless $TLS_WRONG_HOST;
     # connect() always does its initial SELECT 1 through the buffered
     # transport, so it already fails before ever reaching query_stream()'s
     # own TLS handshake -- exercise the streaming transport directly
     # instead, the same way t/14 unit-tests HTTP.pm's other internals
     # independent of a full DBI connect.
     my $client = DBD::ClickhouseNG::HTTP->new(
-        host => TLS_WRONG_HOST, port => TLS_PORT, tls => 1, timeout => 5,
-        user => $user, password => $pass, database => 'DBD_dev',
+        host => $TLS_WRONG_HOST, port => $TLS_PORT, %ca_args, tls => 1, timeout => 5,
+        user => $user, password => $pass, database => $db,
     );
     my $res = $client->query_stream( 'SELECT 1' );
     ok( !$res->{ok}, 'query_stream refuses the connection' );
@@ -83,8 +96,9 @@ subtest 'streaming path refuses a hostname mismatch (same cert/server, wrong nam
 };
 
 subtest 'tls_insecure=1 (buffered path): connects despite the hostname mismatch' => sub {
-    my $tls_dsn = 'dbi:ClickhouseNG:host=' . TLS_WRONG_HOST . ';port=' . TLS_PORT
-        . ';tls=1;tls_insecure=1;database=DBD_dev';
+    plan skip_all => 'set CHNG_TEST_TLS_WRONG_HOST to run this subtest' unless $TLS_WRONG_HOST;
+    my $tls_dsn = 'dbi:ClickhouseNG:host=' . $TLS_WRONG_HOST . ';port=' . $TLS_PORT
+        . ';tls=1;tls_insecure=1' . $ca_dsn . ';database=' . $db;
     my $dbh = DBI->connect( $tls_dsn, $user, $pass, { RaiseError => 1, PrintError => 0 } );
     ok( $dbh, 'connect succeeds' ) or diag $DBI::errstr;
     my( $one ) = $dbh->selectrow_array( 'SELECT 1' );
@@ -93,9 +107,10 @@ subtest 'tls_insecure=1 (buffered path): connects despite the hostname mismatch'
 };
 
 subtest 'tls_insecure=1 (streaming path): query_stream succeeds despite the hostname mismatch' => sub {
+    plan skip_all => 'set CHNG_TEST_TLS_WRONG_HOST to run this subtest' unless $TLS_WRONG_HOST;
     my $client = DBD::ClickhouseNG::HTTP->new(
-        host => TLS_WRONG_HOST, port => TLS_PORT, tls => 1, tls_insecure => 1, timeout => 5,
-        user => $user, password => $pass, database => 'DBD_dev',
+        host => $TLS_WRONG_HOST, port => $TLS_PORT, %ca_args, tls => 1, tls_insecure => 1, timeout => 5,
+        user => $user, password => $pass, database => $db,
     );
     my $res = $client->query_stream( 'SELECT 1' );
     ok( $res->{ok}, 'query_stream succeeds' ) or diag $res->{body};

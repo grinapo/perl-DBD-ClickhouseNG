@@ -1,4 +1,4 @@
-use v5.38;
+use v5.40;
 use Test::More;
 use DBI;
 use JSON::PP;
@@ -130,7 +130,7 @@ subtest 'column_info returns column metadata consistent with the driver\'s own t
     is( $row->[0], 'db1',                'TABLE_CAT' );
     is( $row->[2], 't1',                 'TABLE_NAME' );
     is( $row->[3], 'id',                 'COLUMN_NAME' );
-    is( $row->[4], DBI::SQL_INTEGER(),   'DATA_TYPE matches _map_ch_type(UInt32)' );
+    is( $row->[4], DBI::SQL_INTEGER(),   'DATA_TYPE matches map_ch_type(UInt32)' );
     is( $row->[5], 'UInt32',             'TYPE_NAME is the raw ClickHouse type string' );
     is( $row->[6], 32,                   'COLUMN_SIZE from system.columns.numeric_precision' );
     is( $row->[9], 2,                    'NUM_PREC_RADIX from system.columns.numeric_precision_radix' );

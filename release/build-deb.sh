@@ -91,6 +91,23 @@ YEAR="$( date +%Y )" DEBFULLNAME="$DEBFULLNAME" DEBEMAIL="$DEBEMAIL" perl -0777 
 grep -q 'GPL-1' "$SRC_DIR/debian/copyright" && die \
     "debian/copyright still mentions GPL-1 after the fixup -- the substitution didn't match, check release/build-deb.sh"
 
+# Lintian tidy-ups for a local (non-archive) package:
+#  - drop dh-make-perl's "automagically extracted" template paragraph,
+#  - use the Debian interpreter path in the example scripts (Policy 10.4),
+#  - the first-upload-without-ITP warning is meaningless for a local build.
+echo "release: tidying debian/control, example shebangs, lintian overrides"
+perl -0777 -i -pe 's/\n \.\n This description was automagically extracted from the module by dh-make-perl\.\n/\n/' \
+    "$SRC_DIR/debian/control"
+grep -q 'automagically' "$SRC_DIR/debian/control" && die \
+    "debian/control still has the dh-make-perl template text -- check release/build-deb.sh"
+if [ -d "$SRC_DIR/examples" ]; then
+    sed -i '1s{^#!/usr/bin/env perl\b{#!/usr/bin/perl{' "$SRC_DIR"/examples/*.pl
+fi
+cat > "$SRC_DIR/debian/libdbd-clickhouseng-perl.lintian-overrides" <<'EOF'
+# Local package, not an archive upload: there is no ITP bug to close.
+libdbd-clickhouseng-perl: initial-upload-closes-no-bugs
+EOF
+
 dpkg-checkbuilddeps "$SRC_DIR/debian/control" || die \
     "missing build-dependencies -- install the packages dpkg-checkbuilddeps listed above, then re-run"
 
@@ -104,5 +121,5 @@ find "$DEB_WORK" -maxdepth 1 -name '*.deb' -exec cp -v {} "$DIST_DIR/" \;
 
 if command -v lintian >/dev/null 2>&1; then
     echo "release: lintian (informational -- dh-make-perl output isn't archive-ready as-is):"
-    lintian "$DIST_DIR"/*.deb || true
+    lintian "$DEB_WORK"/*.deb || true
 fi

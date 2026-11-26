@@ -1,11 +1,11 @@
-use v5.38;
+use v5.40;
 use Test::More;
 use DBI qw(:sql_types);
 
 use DBD::ClickhouseNG;
 
-sub infer  { DBD::ClickhouseNG::_infer_ch_type( @_ ) }
-sub encode { DBD::ClickhouseNG::_encode_param( @_ ) }
+sub infer  { DBD::ClickhouseNG::Types::infer_ch_type( @_ ) }
+sub encode { DBD::ClickhouseNG::Types::encode_param( @_ ) }
 
 subtest 'no explicit type: undef' => sub {
     is( infer( undef, undef ), 'Nullable(String)' );
@@ -42,12 +42,12 @@ subtest 'unrecognized explicit type falls back to String' => sub {
     is( infer( 'x', 9999 ), 'String' );
 };
 
-subtest '_encode_param NULL' => sub {
+subtest 'encode_param NULL' => sub {
     is( encode( undef, 'String' ), '\N' );
     is( encode( undef, 'Int64' ), '\N' );
 };
 
-subtest '_encode_param TSV escaping for strings' => sub {
+subtest 'encode_param TSV escaping for strings' => sub {
     is( encode( "a\\b", 'String' ), 'a\\\\b' );
     is( encode( "a\tb", 'String' ), 'a\\tb' );
     is( encode( "a\nb", 'String' ), 'a\\nb' );
@@ -55,7 +55,7 @@ subtest '_encode_param TSV escaping for strings' => sub {
     is( encode( "x\ty", 'String' ), 'x\\ty' );
 };
 
-subtest '_encode_param passes numeric/date/bool types through untouched' => sub {
+subtest 'encode_param passes numeric/date/bool types through untouched' => sub {
     is( encode( 42, 'Int64' ), 42 );
     is( encode( '3.14', 'Float64' ), '3.14' );
     is( encode( 1, 'Bool' ), 1 );
@@ -63,7 +63,7 @@ subtest '_encode_param passes numeric/date/bool types through untouched' => sub 
     is( encode( '2026-07-19 00:00:00', 'DateTime' ), '2026-07-19 00:00:00' );
 };
 
-subtest '_encode_param strips Nullable() wrapper to decide encoding' => sub {
+subtest 'encode_param strips Nullable() wrapper to decide encoding' => sub {
     is( encode( 42, 'Nullable(Int64)' ), 42 );
     is( encode( "a\tb", 'Nullable(String)' ), 'a\\tb' );
 };

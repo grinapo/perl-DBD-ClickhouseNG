@@ -1,11 +1,11 @@
-use v5.38;
+use v5.40;
 use Test::More;
 use DBI qw(:sql_types);
 use JSON::PP ();
 
 use DBD::ClickhouseNG;
 
-sub map_type { DBD::ClickhouseNG::_map_ch_type( shift ) }
+sub map_type { DBD::ClickhouseNG::Types::map_ch_type( shift ) }
 
 my @cases = (
     [ 'Int8',    SQL_INTEGER,  undef, undef, 0 ],
@@ -72,27 +72,27 @@ subtest 'Nullable(Decimal(P,S))' => sub {
 };
 
 subtest '64-bit lossless conversion boundary values' => sub {
-    is( DBD::ClickhouseNG::_coerce_bigint( '9223372036854775807' ),  9223372036854775807, 'IV_MAX' );
-    is( DBD::ClickhouseNG::_coerce_bigint( '9223372036854775808' ),  9223372036854775808, 'IV_MAX+1' );
-    is( DBD::ClickhouseNG::_coerce_bigint( '18446744073709551615' ), 18446744073709551615, 'UV_MAX' );
-    is( DBD::ClickhouseNG::_coerce_bigint( '-9223372036854775808' ), -9223372036854775808, 'IV_MIN' );
-    is( DBD::ClickhouseNG::_coerce_bigint( '99999999999999999999999999999' ),
+    is( DBD::ClickhouseNG::Types::_coerce_bigint( '9223372036854775807' ),  9223372036854775807, 'IV_MAX' );
+    is( DBD::ClickhouseNG::Types::_coerce_bigint( '9223372036854775808' ),  9223372036854775808, 'IV_MAX+1' );
+    is( DBD::ClickhouseNG::Types::_coerce_bigint( '18446744073709551615' ), 18446744073709551615, 'UV_MAX' );
+    is( DBD::ClickhouseNG::Types::_coerce_bigint( '-9223372036854775808' ), -9223372036854775808, 'IV_MIN' );
+    is( DBD::ClickhouseNG::Types::_coerce_bigint( '99999999999999999999999999999' ),
         '99999999999999999999999999999', 'beyond 64-bit falls back to string' );
-    is( DBD::ClickhouseNG::_coerce_bigint( undef ), undef, 'undef passes through' );
+    is( DBD::ClickhouseNG::Types::_coerce_bigint( undef ), undef, 'undef passes through' );
 };
 
 subtest 'Bool coercion' => sub {
-    is( DBD::ClickhouseNG::_coerce_bool( 1 ), 1 );
-    is( DBD::ClickhouseNG::_coerce_bool( 0 ), 0 );
-    is( DBD::ClickhouseNG::_coerce_bool( JSON::PP::true ),  1 );
-    is( DBD::ClickhouseNG::_coerce_bool( JSON::PP::false ), 0 );
-    is( DBD::ClickhouseNG::_coerce_bool( undef ), undef );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( 1 ), 1 );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( 0 ), 0 );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( JSON::PP::true ),  1 );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( JSON::PP::false ), 0 );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( undef ), undef );
 };
 
 subtest 'Bool coercion works for whichever JSON class actually decoded the response' => sub {
     my $json = $DBD::ClickhouseNG::JSON_CLASS->new->utf8->decode( '[true,false]' );
-    is( DBD::ClickhouseNG::_coerce_bool( $json->[0] ), 1 );
-    is( DBD::ClickhouseNG::_coerce_bool( $json->[1] ), 0 );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( $json->[0] ), 1 );
+    is( DBD::ClickhouseNG::Types::_coerce_bool( $json->[1] ), 0 );
 };
 
 done_testing;

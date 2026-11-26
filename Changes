@@ -1,5 +1,15 @@
 Revision history for DBD-ClickhouseNG
 
+0.51   2026-11-20
+       - mTLS: DSN keys tls_cert_file, tls_key_file, tls_ca_file;
+         sends X-ClickHouse-SSL-Certificate-Auth: on with a client certificate.
+       - Tests: offline t/27-mtls.t; live, env-parameterized t/58-live-mtls.t
+         (CHNG_TEST_MTLS_*, skipped when unset); t/57-live-tls.t endpoint now
+         comes from CHNG_TEST_TLS_* instead of hard-coded hosts.
+       - Internal restructuring: the driver is split into single-responsibility
+         modules (dr, db, st, Catalog, Placeholders, Types, Error). No
+         functional change.
+
 0.50   2026-07-20
        - Catalog/introspection: table_info, column_info, type_info_all,
          primary_key_info.

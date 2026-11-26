@@ -1,9 +1,9 @@
-use v5.38;
+use v5.40;
 use Test::More;
 
 use DBD::ClickhouseNG;
 
-sub scan { DBD::ClickhouseNG::_scan_placeholders( shift ) }
+sub scan { DBD::ClickhouseNG::Placeholders::scan_placeholders( shift ) }
 
 subtest 'plain placeholders' => sub {
     my( $segs, $n ) = scan( 'SELECT * FROM t WHERE a = ? AND b = ?' );

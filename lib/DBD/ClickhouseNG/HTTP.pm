@@ -1,6 +1,6 @@
 package DBD::ClickhouseNG::HTTP;
 
-use v5.38;
+use v5.40;
 use HTTP::Tiny 0.088;
 use IO::Compress::Gzip   qw(gzip $GzipError);
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
@@ -23,6 +23,7 @@ sub new( $class, %args ) {
         tls          => $args{tls},
         tls_insecure => $args{tls_insecure},
         timeout      => $args{timeout},
+        ssl_files    => { _ssl_files( \%args ) },
         base_url     => "$scheme://$args{host}:$args{port}/",
     }, $class;
 
@@ -34,17 +35,34 @@ sub new( $class, %args ) {
         timeout    => $args{timeout},
         keep_alive => 1,
         verify_SSL => $args{tls_insecure} ? 0 : 1,
+        ( %{ $self->{ssl_files} } ? ( SSL_options => { %{ $self->{ssl_files} } } ) : () ),
     );
 
     return $self;
 }
 
+# IO::Socket::SSL option names for the optional client certificate (mTLS)
+# and private CA, shared by the buffered (HTTP::Tiny SSL_options) and
+# streaming (Net::HTTPS constructor) paths. Empty unless tls=1.
+sub _ssl_files( $args ) {
+    return () unless $args->{tls};
+    my %map = ( tls_cert_file => 'SSL_cert_file', tls_key_file => 'SSL_key_file', tls_ca_file => 'SSL_ca_file' );
+    return map { defined $args->{$_} ? ( $map{$_} => $args->{$_} ) : () } sort keys %map;
+}
+
+# With a client certificate (tls_cert_file) the server authenticates the user
+# from the certificate, which ClickHouse only does when asked via
+# X-ClickHouse-SSL-Certificate-Auth: on; the password header is then omitted
+# unless a password was actually given. Without a certificate the existing
+# rule applies (nothing is sent for the 'default' user with no password).
 sub _auth_headers( $self ) {
-    return {} if $self->{user} eq 'default' && $self->{password} eq '';
-    return {
-        'X-ClickHouse-User' => $self->{user},
-        'X-ClickHouse-Key'  => $self->{password},
-    };
+    my $cert = defined $self->{ssl_files}{SSL_cert_file};
+    return {} if !$cert && $self->{user} eq 'default' && $self->{password} eq '';
+    my %h;
+    $h{'X-ClickHouse-User'} = $self->{user} unless $self->{user} eq 'default';
+    $h{'X-ClickHouse-Key'}  = $self->{password} if length $self->{password} || !$cert;
+    $h{'X-ClickHouse-SSL-Certificate-Auth'} = 'on' if $cert;
+    return \%h;
 }
 
 sub query( $self, $sql, $params = {} ) {
@@ -116,11 +134,14 @@ sub ping( $self ) {
 sub _stream_tls_args( $self ) {
     return () unless $self->{tls};
 
+    my %files = %{ $self->{ssl_files} };
+
     if( $self->{tls_insecure} ) {
-        return ( SSL_verify_mode => SSL_VERIFY_NONE, SSL_hostname => $self->{host} );
+        return ( SSL_verify_mode => SSL_VERIFY_NONE, SSL_hostname => $self->{host}, %files );
     }
 
     return (
+        %files,
         SSL_verify_mode => SSL_VERIFY_PEER,
         SSL_hostname    => $self->{host},
         # IO::Socket::SSL only *warns* on a hostname mismatch unless a
@@ -218,7 +239,7 @@ sub query_stream( $self, $sql, $params = {} ) {
 # ---------------------------------------------------------------------------
 package DBD::ClickhouseNG::HTTP::LineReader;
 
-use v5.38;
+use v5.40;
 
 sub new( $class, $sock ) {
     return bless { sock => $sock, buf => '', eof => 0 }, $class;
