@@ -7,39 +7,37 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Debian stable: perl 5.40 and every prerequisite come from apt, so the
+    # same packages satisfy both the test run and dpkg-checkbuilddeps.
+    container: debian:trixie
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    services:
+      # Service containers cannot be made conditional; it is only used by the
+      # live tests, which are enabled on tag builds below.
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.8
+        env:
+          CLICKHOUSE_SKIP_USER_SETUP: 1
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install cpanm
+      - name: Install Perl dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cpanminus
-
-      - name: Install ClickHouse server (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg
-          curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' \
-            | sudo gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg
-          ARCH=$(dpkg --print-architecture)
-          echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=${ARCH}] https://packages.clickhouse.com/deb stable main" \
-            | sudo tee /etc/apt/sources.list.d/clickhouse.list
-          sudo apt-get update
-          sudo apt-get install -y clickhouse-server clickhouse-client
-          sudo service clickhouse-server start
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:8123/ping && break
-            sleep 1
-          done
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            perl libmodule-build-tiny-perl libdbi-perl libio-socket-ssl-perl \
+            libnet-http-perl libjson-pp-perl curl ca-certificates
 
       - name: Enable live integration tests (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
-        run: echo "CHNG_TEST_DSN=dbi:ClickhouseNG:host=localhost" >> "$GITHUB_ENV"
-
-      - name: Install Perl dependencies
         run: |
-          cpanm --sudo --notest Module::Build::Tiny
-          cpanm --sudo --notest --installdeps .
+          for i in $(seq 1 30); do
+            curl -sf http://clickhouse:8123/ping && break
+            sleep 1
+          done
+          curl -sf http://clickhouse:8123/ping
+          echo "CHNG_TEST_DSN=dbi:ClickhouseNG:host=clickhouse" >> "$GITHUB_ENV"
 
       - name: Run tests
         run: |
@@ -49,7 +47,7 @@ jobs:
 
       - name: Install packaging tools (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
-        run: sudo apt-get install -y dh-make-perl fakeroot dpkg-dev
+        run: apt-get install -y dh-make-perl fakeroot dpkg-dev
 
       - name: Build release artifacts (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')

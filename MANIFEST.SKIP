@@ -16,6 +16,7 @@
 ^archive/
 ^CLAUDE\.md$
 ^\.claude/
+^\.github/
 ^vendor/
 ^site_perl(/|$)
 ^dev_db\.access\.dat$
