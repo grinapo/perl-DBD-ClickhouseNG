@@ -1,6 +1,6 @@
 # Release tooling
 
-Three scripts, each usable standalone (later ones build on earlier ones'
+Four scripts, each usable standalone (later ones build on earlier ones'
 output automatically if it's missing). Run from anywhere; they locate the
 repo root themselves. All output goes to `release/dist/` (hgignored --
 regenerate, don't commit).
@@ -59,3 +59,31 @@ Requires:
 Usage:
 
     PAUSE_USER=... PAUSE_PASS=... release/cpan-upload.sh [--allow-dirty] [--tarball PATH] [--yes]
+
+## `publish-git.sh`
+
+Publishes a tagged hg release to the public git repository as a snapshot
+(no hg history). It exports exactly the files of the hg tag `v<version>`
+(`hg archive`, so ignored local files such as `.test-db*` and `keys/` are
+never copied), mirrors them into the git working tree with
+`rsync --delete` (files removed in hg disappear from git too), then
+`git add -A`, commits and creates an annotated tag.
+
+Pushing the `vNN.MM` / `vNN.MM.KK` tag makes CI build the tarball and
+`.deb` and publish the GitHub release, so pushing is safe by default:
+
+- without `--yes` it commits and tags in the local git tree only, and
+  prints the push command (`git push --atomic`: branch and tag together).
+
+It refuses a dirty git tree, an existing git tag, or a release with no
+changes. All settings are variables at the top of the script and can be
+overridden from the environment (`GIT_TREE`, default
+`/tmp/github-out/perl-DBD-ClickhouseNG`; `GIT_REMOTE`, `GIT_PUSH_REF`,
+`TAG`, `HG_REV`, `EXPORT_DIR`, `RSYNC_EXCLUDES`, `COMMIT_MSG`, `TAG_MSG`).
+
+Typical release: bump `$VERSION` (`lib/DBD/ClickhouseNG.pm`) and
+`META.json`, add a `Changes` entry, `hg commit`, `hg tag v<version>`, then:
+
+    release/publish-git.sh          # commit + tag locally, inspect, then
+                                    # run the printed push command
+    release/publish-git.sh --yes    # or: all in one go, including the push

@@ -13,6 +13,8 @@ jobs:
     env:
       DEBIAN_FRONTEND: noninteractive
       CH_CERTS: /etc/clickhouse-server/certs
+    outputs:
+      release: ${{ steps.release.outputs.release }}
     steps:
       - uses: actions/checkout@v7
 
@@ -22,6 +24,20 @@ jobs:
           apt-get install -y --no-install-recommends \
             perl libmodule-build-tiny-perl libdbi-perl libio-socket-ssl-perl \
             libnet-http-perl libjson-pp-perl curl ca-certificates gnupg openssl
+
+      # vNN.MM or vNN.MM.KK tags publish a GitHub release (job "release");
+      # fail early if the tag disagrees with $VERSION or Changes.
+      - name: Detect release tag
+        id: release
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+(\.[0-9]+)?)$ ]] || exit 0
+          export VER="${BASH_REMATCH[1]}"
+          MODVER="$( perl -MExtUtils::MakeMaker -e 'print MM->parse_version(shift)' lib/DBD/ClickhouseNG.pm )"
+          [ "$MODVER" = "$VER" ] || { echo "tag v$VER but \$VERSION is $MODVER"; exit 1; }
+          perl -00 -ne '$found = 1 if /^\Q$ENV{VER}\E\s/; END { exit !$found }' Changes \
+            || { echo "no Changes entry for $VER"; exit 1; }
+          echo "release=true" >> "$GITHUB_OUTPUT"
 
       - name: Install ClickHouse server
         run: |
@@ -81,3 +97,26 @@ jobs:
           name: release-dist
           path: release/dist/*
           if-no-files-found: error
+
+  release:
+    needs: test
+    if: needs.test.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          export VER="${TAG#v}"
+          perl -00 -ne 'print if /^\Q$ENV{VER}\E\s/' Changes > notes.md
+          gh release create "$TAG" dist/* --verify-tag --title "$VER" --notes-file notes.md

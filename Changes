@@ -1,5 +1,7 @@
 Revision history for DBD-ClickhouseNG
-=====================================
+
+0.52   2026-11-26
+       - No code changes, only updates to the CI/CD.
 
 0.51   2026-11-20
        - mTLS: DSN keys tls_cert_file, tls_key_file, tls_ca_file;
