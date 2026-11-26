@@ -19,6 +19,7 @@ README.md
 t/README.md
 t/00-load.t
 t/01-module-deps.t
+t/02-version.t
 t/10-placeholders.t
 t/11-types.t
 t/12-infer.t

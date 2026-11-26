@@ -9,6 +9,11 @@
 #   - without --yes it commits and tags in the local git tree only, then
 #     prints the push command and exits 0.
 #
+# The hg repo exported is the one this script lives in, so another user
+# (e.g. the one owning the git tree) can run it straight from there:
+#   ~owner/repo/release/publish-git.sh
+# That user only needs read access to the hg repo; nothing is written there.
+#
 # Every setting below can be overridden from the environment, e.g.
 #   GIT_TREE=/srv/git/repo release/publish-git.sh
 #
@@ -33,7 +38,7 @@ GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_PUSH_REF="${GIT_PUSH_REF:-HEAD}"         # branch to push with the tag (HEAD: current branch)
 TAG="${TAG:-v$VERSION}"                      # git tag; also the hg tag exported, unless HG_REV is set
 HG_REV="${HG_REV:-$TAG}"                     # hg revision to export
-EXPORT_DIR="${EXPORT_DIR:-$WORK_DIR/git-export}"
+EXPORT_PARENT="${EXPORT_PARENT:-${TMPDIR:-/tmp}}"  # a private temp dir is created (and removed) here
 RSYNC_EXCLUDES="${RSYNC_EXCLUDES:-.git .hgignore .hgtags}"  # never copied to, nor deleted from, GIT_TREE
 COMMIT_MSG="${COMMIT_MSG:-Release $VERSION}"
 TAG_MSG="${TAG_MSG:-Release $VERSION}"
@@ -46,8 +51,11 @@ git -C "$GIT_TREE" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
 ! git -C "$GIT_TREE" rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
     || die "git tag $TAG already exists in $GIT_TREE"
 
-echo "release: exporting hg revision '$HG_REV' to $EXPORT_DIR"
-rm -rf "$EXPORT_DIR"
+TMP_DIR="$( mktemp -d "$EXPORT_PARENT/chng-git-export.XXXXXX" )"
+trap 'rm -rf "$TMP_DIR"' EXIT
+EXPORT_DIR="$TMP_DIR/export"
+
+echo "release: exporting hg revision '$HG_REV' from $ROOT_DIR"
 hg -R "$ROOT_DIR" archive -r "$HG_REV" "$EXPORT_DIR"
 rm -f "$EXPORT_DIR/.hg_archival.txt"
 

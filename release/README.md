@@ -1,6 +1,6 @@
 # Release tooling
 
-Four scripts, each usable standalone (later ones build on earlier ones'
+Five scripts, each usable standalone (later ones build on earlier ones'
 output automatically if it's missing). Run from anywhere; they locate the
 repo root themselves. All output goes to `release/dist/` (hgignored --
 regenerate, don't commit).
@@ -69,7 +69,7 @@ never copied), mirrors them into the git working tree with
 `rsync --delete` (files removed in hg disappear from git too), then
 `git add -A`, commits and creates an annotated tag.
 
-Pushing the `vNN.MM` / `vNN.MM.KK` tag makes CI build the tarball and
+Pushing the `v<version>` tag (e.g. `v0.53`, `v0.5301`) makes CI build the tarball and
 `.deb` and publish the GitHub release, so pushing is safe by default:
 
 - without `--yes` it commits and tags in the local git tree only, and
@@ -79,11 +79,47 @@ It refuses a dirty git tree, an existing git tag, or a release with no
 changes. All settings are variables at the top of the script and can be
 overridden from the environment (`GIT_TREE`, default
 `/tmp/github-out/perl-DBD-ClickhouseNG`; `GIT_REMOTE`, `GIT_PUSH_REF`,
-`TAG`, `HG_REV`, `EXPORT_DIR`, `RSYNC_EXCLUDES`, `COMMIT_MSG`, `TAG_MSG`).
+`TAG`, `HG_REV`, `EXPORT_PARENT`, `RSYNC_EXCLUDES`, `COMMIT_MSG`, `TAG_MSG`).
 
-Typical release: bump `$VERSION` (`lib/DBD/ClickhouseNG.pm`) and
-`META.json`, add a `Changes` entry, `hg commit`, `hg tag v<version>`, then:
+The export goes to a private temporary directory under `EXPORT_PARENT`
+(default `$TMPDIR`, else `/tmp`), removed when the script exits, also on
+failure.
+
+The hg repo exported is the one the script lives in (no setting), and
+nothing is written into it. So the user owning the git tree can run it
+directly from the hg owner's checkout, needing only read access there:
+
+    ~hgowner/repo/release/publish-git.sh
+
+hg may warn that it does not trust that repo's `.hg/hgrc`; that is harmless.
+
+Typical release: `release/bump-version.pl NEW` (see below), write the
+`Changes` entries, `hg commit`, `hg tag v<version>`, then:
 
     release/publish-git.sh          # commit + tag locally, inspect, then
                                     # run the printed push command
     release/publish-git.sh --yes    # or: all in one go, including the push
+
+## `bump-version.pl`
+
+Sets a new version in every place it is written by hand: `$VERSION` in
+`lib/DBD/ClickhouseNG.pm`, `"version"` in `META.json` (edited in place,
+formatting kept), and a new top `Changes` heading `NEW  YYYY-MM-DD` whose
+entries you then write. Nothing is written unless all three edits apply.
+`t/02-version.t` fails if the three ever disagree.
+
+    release/bump-version.pl NEW [--amend]
+
+Versions are plain decimals, and NEW must be higher than the current one
+under Perl's version rules:
+
+- a release with code changes: `0.53`, `0.54`, ...
+- framework-only (CI/CD, packaging) re-releases of 0.53: `0.5301`,
+  `0.5302`, ... (between 0.53 and 0.54)
+
+Never use dotted forms like `0.53.01`: Perl/CPAN read them as v0.53.1 =
+0.053001, which sorts *below* 0.51.
+
+`--amend` renames the existing top `Changes` heading to NEW (and today's
+date) instead of adding one, so a series of framework-only releases can
+share a single `Changes` entry that you keep editing.

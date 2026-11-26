@@ -1,7 +1,7 @@
 Revision history for DBD-ClickhouseNG
 
-0.52.03 2026-11-26
-       - CI/CD
+0.5204 2026-11-26
+       - CI/CD updates and fixes
 
 0.52   2026-11-26
        - No code changes, only updates to the CI/CD.

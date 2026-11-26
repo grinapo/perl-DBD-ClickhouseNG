@@ -25,18 +25,17 @@ jobs:
             perl libmodule-build-tiny-perl libdbi-perl libio-socket-ssl-perl \
             libnet-http-perl libjson-pp-perl curl ca-certificates gnupg openssl
 
-      # vNN.MM or vNN.MM.KK tags publish a GitHub release (job "release");
-      # fail early if the tag disagrees with $VERSION or Changes.
+      # v<decimal version> tags (v0.53, v0.5301) publish a GitHub release
+      # (job "release"); fail early if the tag disagrees with $VERSION.
+      # t/02-version.t keeps META.json and Changes in line with $VERSION.
       - name: Detect release tag
         id: release
         shell: bash
         run: |
-          [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+(\.[0-9]+)?)$ ]] || exit 0
-          export VER="${BASH_REMATCH[1]}"
+          [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+)$ ]] || exit 0
+          VER="${BASH_REMATCH[1]}"
           MODVER="$( perl -MExtUtils::MakeMaker -e 'print MM->parse_version(shift)' lib/DBD/ClickhouseNG.pm )"
           [ "$MODVER" = "$VER" ] || { echo "tag v$VER but \$VERSION is $MODVER"; exit 1; }
-          perl -00 -ne '$found = 1 if /^\Q$ENV{VER}\E\s/; END { exit !$found }' Changes \
-            || { echo "no Changes entry for $VER"; exit 1; }
           echo "release=true" >> "$GITHUB_OUTPUT"
 
       - name: Install ClickHouse server
